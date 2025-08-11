@@ -10,10 +10,7 @@ import '../widgets/chat_room_widget.dart';
 class HomePage extends ConsumerStatefulWidget {
   final String title;
 
-  const HomePage({
-    super.key,
-    required this.title,
-  });
+  const HomePage({super.key, required this.title});
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -23,7 +20,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize chat after widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(chatControllerProvider.notifier).initializeChat();
@@ -34,29 +31,38 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatControllerProvider);
 
-    return switch (chatState.state) {
-      ChatInitializationState.idle ||
-      ChatInitializationState.initializing => 
-        ChatLoadingWidget(title: widget.title),
-      
-      ChatInitializationState.error => 
+    // Use pattern matching to handle different chat states elegantly
+    return switch (chatState) {
+      // Idle and initializing states show a loading indicator
+      ChatInitializationResult(state: ChatInitializationState.idle) ||
+      ChatInitializationResult(
+        state: ChatInitializationState.initializing,
+      ) => ChatLoadingWidget(title: widget.title),
+
+      // Error state shows an error message with a retry button
+      ChatInitializationResult(
+        state: ChatInitializationState.error,
+        error: final error,
+      ) =>
         ChatErrorWidget(
           title: widget.title,
-          error: chatState.error ?? 'Unknown error',
+          error: error ?? 'An unknown error occurred.',
           onRetry: () => ref.read(chatControllerProvider.notifier).retry(),
         ),
-      
-      ChatInitializationState.initialized => 
-        chatState.chatRoom != null
-          ? ChatRoomWidget(
-              title: widget.title,
-              chatRoom: chatState.chatRoom!,
-            )
-          : ChatErrorWidget(
-              title: widget.title,
-              error: 'Chat room not available',
-              onRetry: () => ref.read(chatControllerProvider.notifier).retry(),
-            ),
+
+      // Initialized state with a valid chat room shows the chat room UI
+      ChatInitializationResult(
+        state: ChatInitializationState.initialized,
+        chatRoom: final chatRoom?,
+      ) =>
+        ChatRoomWidget(title: widget.title, chatRoom: chatRoom),
+
+      // Handle the case where initialization finished but the chat room is null
+      _ => ChatErrorWidget(
+        title: widget.title,
+        error: 'Chat room could not be initialized.',
+        onRetry: () => ref.read(chatControllerProvider.notifier).retry(),
+      ),
     };
   }
 }
