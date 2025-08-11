@@ -11,14 +11,19 @@ import '../widgets/chat_room_widget.dart';
 /// Following Single Responsibility Principle - handles channel selection UI
 class HomePage extends ConsumerWidget {
   final String title;
+  final Map<String, ChannelConfig>? remoteChannels;
 
   const HomePage({
     super.key,
     required this.title,
+    this.remoteChannels,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Use remote channels if available, otherwise fall back to default
+    final channels = remoteChannels ?? AppConfig.channels;
+    
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -48,14 +53,24 @@ class HomePage extends ConsumerWidget {
               ),
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 8),
+            if (remoteChannels != null)
+              Text(
+                'Konfigurasi dari Firebase Remote Config',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.green[600],
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
             const SizedBox(height: 48),
             
             // Channel Cards
             Expanded(
               child: ListView.builder(
-                itemCount: AppConfig.channels.length,
+                itemCount: channels.length,
                 itemBuilder: (context, index) {
-                  final channelEntry = AppConfig.channels.entries.elementAt(index);
+                  final channelEntry = channels.entries.elementAt(index);
                   final channelKey = channelEntry.key;
                   final channel = channelEntry.value;
                   

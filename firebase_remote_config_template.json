@@ -1,0 +1,71 @@
+{
+  "parameters": {
+    "qiscus_app_id": {
+      "defaultValue": {
+        "value": "YOUR_QISCUS_APP_ID"
+      },
+      "description": "Qiscus Multichannel App ID - Replace with your actual Qiscus App ID",
+      "valueType": "STRING"
+    },
+    "konsultasi_channel_id": {
+      "defaultValue": {
+        "value": "YOUR_KONSULTASI_CHANNEL_ID"
+      },
+      "description": "Channel ID for Konsultasi (General Consultation) - Replace with your actual channel ID",
+      "valueType": "STRING"
+    },
+    "bantuan_channel_id": {
+      "defaultValue": {
+        "value": "YOUR_BANTUAN_CHANNEL_ID"
+      },
+      "description": "Channel ID for Bantuan (Technical Support) - Replace with your actual channel ID",
+      "valueType": "STRING"
+    },
+    "qiscus_sdk_base_url": {
+      "defaultValue": {
+        "value": "https://api3.qiscus.com"
+      },
+      "description": "Qiscus SDK Base URL - Usually doesn't need to be changed",
+      "valueType": "STRING"
+    },
+    "qiscus_base_url": {
+      "defaultValue": {
+        "value": "https://multichannel.qiscus.com"
+      },
+      "description": "Qiscus Multichannel Base URL - Usually doesn't need to be changed",
+      "valueType": "STRING"
+    },
+    "app_title": {
+      "defaultValue": {
+        "value": "Multi-Channel Chat Demo"
+      },
+      "description": "Application title displayed in the app",
+      "valueType": "STRING"
+    },
+    "enable_debug_mode": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Enable debug logging for troubleshooting",
+      "valueType": "BOOLEAN"
+    },
+    "fetch_timeout_minutes": {
+      "defaultValue": {
+        "value": "1"
+      },
+      "description": "Remote config fetch timeout in minutes",
+      "valueType": "NUMBER"
+    },
+    "minimum_fetch_interval_hours": {
+      "defaultValue": {
+        "value": "1"
+      },
+      "description": "Minimum interval between remote config fetches in hours",
+      "valueType": "NUMBER"
+    }
+  },
+  "version": {
+    "versionNumber": "1",
+    "isLegacy": true
+  }
+}
