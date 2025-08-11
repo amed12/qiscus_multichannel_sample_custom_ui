@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qiscus_multichannel_widget/qiscus_multichannel_widget.dart';
 import '../../../core/services/logger_service.dart';
+import '../pages/chat_screen.dart';
 
 /// Chat room widget following Single Responsibility Principle
 class ChatRoomWidget extends StatelessWidget {
@@ -40,9 +41,15 @@ class ChatRoomWidget extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          _logger.debug('Chat room accessed: ${chatRoom.name} (ID: ${chatRoom.id})');
-          // Here you can navigate to actual chat screen or perform other actions
+          _logger.debug('Navigating to chat room: ${chatRoom.name} (ID: ${chatRoom.id})');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(chatRoom: chatRoom),
+            ),
+          );
         },
+        tooltip: 'Open Chat',
         child: const Icon(Icons.chat),
       ),
     );
