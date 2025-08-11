@@ -2,40 +2,56 @@ import 'package:flutter/material.dart';
 
 /// Error widget following Single Responsibility Principle
 class ChatErrorWidget extends StatelessWidget {
-  final String title;
   final String error;
   final VoidCallback onRetry;
 
   const ChatErrorWidget({
     super.key,
-    this.title = 'Qiscus Chat',
     required this.error,
     required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(title),
-      ),
-      body: Center(
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Error: $error',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.red[400],
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
+            Text(
+              'Terjadi Kesalahan',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.red[700],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
               onPressed: onRetry,
-              child: const Text('Retry'),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Coba Lagi'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25),
+                ),
+              ),
             ),
           ],
         ),

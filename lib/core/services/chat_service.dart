@@ -22,11 +22,13 @@ class ChatInitializationResult {
   final ChatInitializationState state;
   final QChatRoom? chatRoom;
   final String? error;
+  final String? channelKey;
 
   const ChatInitializationResult({
     required this.state,
     this.chatRoom,
     this.error,
+    this.channelKey,
   });
 
   bool get isSuccess => state == ChatInitializationState.initialized && chatRoom != null;

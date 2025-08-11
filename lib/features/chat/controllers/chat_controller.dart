@@ -16,10 +16,10 @@ class ChatController extends StateNotifier<ChatInitializationResult> {
         _logger = logger,
         super(const ChatInitializationResult(state: ChatInitializationState.idle));
 
-  /// Initialize chat with user configuration
-  Future<void> initializeChat() async {
+  /// Initialize chat with user configuration for specific channel
+  Future<void> initializeChat({String? channelKey}) async {
     try {
-      _logger.debug('Starting chat initialization...');
+      _logger.debug('Starting chat initialization for channel: $channelKey');
       
       // Set initializing state
       state = const ChatInitializationResult(
@@ -39,8 +39,16 @@ class ChatController extends StateNotifier<ChatInitializationResult> {
         avatarUrl: 'https://ui-avatars.com/api/?name=${AppConfig.displayName}&background=random',
       );
 
-      // Set channel ID if provided
-      await _chatService.setChannelId(AppConfig.channelId);
+      // Set channel ID based on channel key
+      String channelId;
+      if (channelKey != null && AppConfig.channels.containsKey(channelKey)) {
+        channelId = AppConfig.channels[channelKey]!.id;
+      } else {
+        // Default to first channel if no key provided
+        channelId = AppConfig.channels.values.first.id;
+      }
+      
+      await _chatService.setChannelId(channelId);
 
       // Initiate chat
       final chatRoom = await _chatService.initiateChat();
@@ -49,9 +57,10 @@ class ChatController extends StateNotifier<ChatInitializationResult> {
       state = ChatInitializationResult(
         state: ChatInitializationState.initialized,
         chatRoom: chatRoom,
+        channelKey: channelKey,
       );
 
-      _logger.info('Chat initialization completed successfully');
+      _logger.info('Chat initialization completed successfully for channel: $channelKey');
     } catch (e, stackTrace) {
       _logger.error('Chat initialization failed', e, stackTrace);
       
