@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/app_widget.dart';
 
 /// Main entry point following SOLID principles
@@ -10,5 +9,5 @@ import 'app/app_widget.dart';
 /// - Dependency Inversion: Depends on abstractions (Flutter framework)
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: AppWidget()));
+  runApp(const AppWidget());
 }

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qiscus_multichannel_widget/qiscus_multichannel_widget.dart';
 import '../../../core/services/logger_service.dart';
+import '../../../core/config/app_config.dart';
 
-/// Custom chat room widget built from scratch
+/// Custom chat room widget built from scratch following Qiscus patterns
 /// Following Single Responsibility Principle - handles chat UI and messaging
 class CustomChatRoom extends ConsumerStatefulWidget {
   final QChatRoom chatRoom;
@@ -21,8 +22,6 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ILoggerService _logger = LoggerService();
-  
-  bool _isSending = false;
 
   @override
   void initState() {
@@ -39,17 +38,15 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     super.dispose();
   }
 
-  /// Send a text message using Qiscus SDK
+  /// Send a text message using Qiscus patterns
   Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty || _isSending) return;
+    if (_messageController.text.trim().isEmpty) return;
 
     final messageText = _messageController.text.trim();
     _messageController.clear();
 
     try {
-      setState(() => _isSending = true);
-      
-      // Create QMessage object for Qiscus SDK
+      // Create QMessage object following Qiscus patterns
       final message = QMessage(
         id: DateTime.now().millisecondsSinceEpoch,
         chatRoomId: widget.chatRoom.id,
@@ -62,15 +59,14 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
         extras: {},
         payload: null,
         sender: QUser(
-          id: 'current-user',
-          name: 'You',
+          id: AppConfig.userId,
+          name: AppConfig.displayName,
           avatarUrl: null,
         ),
       );
       
-      // Send message using Qiscus provider
-      final qiscus = ref.read(QMultichannel.provider);
-      await qiscus.sendMessage(message);
+      // Send message using messagesNotifierProvider like in Qiscus source
+      await ref.read(messagesNotifierProvider.notifier).sendMessage(message);
       
       _logger.debug('Message sent successfully: $messageText');
       
@@ -90,8 +86,6 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
           ),
         );
       }
-    } finally {
-      setState(() => _isSending = false);
     }
   }
 
@@ -110,14 +104,20 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch messages from Qiscus provider
+    // Follow Qiscus pattern: watch providers directly like in QChatRoomScreenState
     final messages = ref.watch(mappedMessagesProvider);
+    final room = ref.watch(roomProvider.select((v) => v.valueOrNull?.room));
+    
+    // Show loading if no messages and no room yet
+    if (messages.isEmpty && room == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     
     return Column(
       children: [
         // Messages list
         Expanded(
-          child: messages.isEmpty
+          child: messages.isEmpty && room != null
               ? _buildEmptyState()
               : _buildMessagesList(messages),
         ),
@@ -128,32 +128,28 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     );
   }
 
-  /// Build empty state when no messages
+  /// Build empty state when no messages (following Qiscus pattern)
   Widget _buildEmptyState() {
-    return Center(
+    return SizedBox(
+      width: MediaQuery.of(context).size.width,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
           Text(
-            'No messages yet',
+            "No Message here yet…",
             style: TextStyle(
-              fontSize: 18,
               color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Start the conversation!',
+            "Great discussion start from greeting each others first",
             style: TextStyle(
-              fontSize: 14,
               color: Colors.grey[500],
+              fontSize: 13,
             ),
           ),
         ],
@@ -161,10 +157,11 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     );
   }
 
-  /// Build messages list
+  /// Build messages list (following Qiscus pattern)
   Widget _buildMessagesList(List<QMessage> messages) {
     return ListView.builder(
       controller: _scrollController,
+      reverse: true, // Like in Qiscus - newest messages at bottom
       padding: const EdgeInsets.all(16),
       itemCount: messages.length,
       itemBuilder: (context, index) {
@@ -174,16 +171,23 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     );
   }
 
-  /// Build individual message bubble
+  /// Build individual message bubble (following Qiscus pattern)
   Widget _buildMessageBubble(QMessage message) {
-    // Get current user account to determine if message is from me
-    final account = ref.watch(accountProvider);
-    final isMe = account.when(
-      data: (acc) => message.sender.id == acc.id,
-      loading: () => false,
-      error: (_, __) => false,
-    );
+    // Follow Qiscus pattern: use accountProvider to determine ownership
+    final accountId = ref.watch(accountProvider.select((v) => v.whenData((value) => value.id)));
     
+    return accountId.when(
+      data: (accountId) {
+        final isMe = message.sender.id == accountId;
+        return _buildChatBubble(message, isMe);
+      },
+      loading: () => _buildChatBubble(message, false),
+      error: (e, _) => _buildChatBubble(message, false),
+    );
+  }
+
+  /// Build chat bubble widget
+  Widget _buildChatBubble(QMessage message, bool isMe) {
     final text = message.text;
     final timestamp = message.timestamp;
     final senderName = message.sender.name;
@@ -296,18 +300,9 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
           ),
           const SizedBox(width: 12),
           FloatingActionButton.small(
-            onPressed: _isSending ? null : _sendMessage,
+            onPressed: _sendMessage,
             backgroundColor: Theme.of(context).primaryColor,
-            child: _isSending
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Icon(Icons.send, color: Colors.white),
+            child: const Icon(Icons.send, color: Colors.white),
           ),
         ],
       ),
