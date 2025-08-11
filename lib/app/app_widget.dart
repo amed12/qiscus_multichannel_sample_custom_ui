@@ -17,17 +17,21 @@ class AppWidget extends ConsumerWidget {
     return appConfigAsync.when(
       data: (appConfig) => QMultichannelProvider(
         appId: appConfig.qiscusAppId,
+        baseUrl: appConfig.baseUrl,
+        sdkBaseUrl: appConfig.sdkBaseUrl,
         hideEventUI: true,
         builder: (context) {
           return MaterialApp(
-            title: AppConfig.appTitle,
+            title: appConfig.appTitle,
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
               useMaterial3: true,
             ),
             home: HomePage(
-              title: AppConfig.appTitle,
+              title: appConfig.appTitle,
               remoteChannels: appConfig.channels,
+              isRemoteConfig: true,
+              enableDebugMode: appConfig.enableDebugMode,
             ),
           );
         },

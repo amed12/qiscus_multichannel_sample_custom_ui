@@ -6,11 +6,13 @@ import '../pages/chat_screen.dart';
 /// Chat room widget following Single Responsibility Principle
 class ChatRoomWidget extends StatelessWidget {
   final QChatRoom chatRoom;
+  final bool enableDebugMode;
   final ILoggerService _logger = LoggerService();
 
   ChatRoomWidget({
     super.key,
     required this.chatRoom,
+    this.enableDebugMode = false,
   });
 
   @override
@@ -49,6 +51,29 @@ class ChatRoomWidget extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
+            if (enableDebugMode) ...[  
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Debug Mode: ON', 
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[700]),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Room ID: ${chatRoom.id}'),
+                    Text('Room Name: ${chatRoom.name}'),
+                    Text('Room Type: ${chatRoom.type}'),
+                    Text('Room Avatar URL: ${chatRoom.avatarUrl ?? "N/A"}'),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: () {

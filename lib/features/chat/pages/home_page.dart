@@ -12,11 +12,15 @@ import '../widgets/chat_room_widget.dart';
 class HomePage extends ConsumerWidget {
   final String title;
   final Map<String, ChannelConfig>? remoteChannels;
+  final bool isRemoteConfig;
+  final bool enableDebugMode;
 
   const HomePage({
     super.key,
     required this.title,
     this.remoteChannels,
+    this.isRemoteConfig = false,
+    this.enableDebugMode = false,
   });
 
   @override
@@ -54,7 +58,7 @@ class HomePage extends ConsumerWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            if (remoteChannels != null)
+            if (isRemoteConfig)
               Text(
                 'Konfigurasi dari Firebase Remote Config',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -63,6 +67,29 @@ class HomePage extends ConsumerWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
+            if (enableDebugMode) ...[  
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Debug Mode: ON', 
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[700]),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('App Title: $title'),
+                    if (remoteChannels != null)
+                      for (var entry in remoteChannels!.entries)
+                        Text('Channel ${entry.key}: ${entry.value.id}'),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 48),
             
             // Channel Cards
@@ -191,6 +218,7 @@ class HomePage extends ConsumerWidget {
         builder: (context) => ChannelChatPage(
           channelKey: channelKey,
           channel: channel,
+          enableDebugMode: enableDebugMode,
         ),
       ),
     );
@@ -201,11 +229,13 @@ class HomePage extends ConsumerWidget {
 class ChannelChatPage extends ConsumerStatefulWidget {
   final String channelKey;
   final ChannelConfig channel;
+  final bool enableDebugMode;
 
   const ChannelChatPage({
     super.key,
     required this.channelKey,
     required this.channel,
+    this.enableDebugMode = false,
   });
 
   @override
@@ -260,7 +290,10 @@ class _ChannelChatPageState extends ConsumerState<ChannelChatPage> {
           chatRoom: final chatRoom,
         ) =>
           chatRoom != null
-              ? ChatRoomWidget(chatRoom: chatRoom)
+              ? ChatRoomWidget(
+                  chatRoom: chatRoom,
+                  enableDebugMode: widget.enableDebugMode,
+                )
               : ChatErrorWidget(
                   error: 'Chat room is null',
                   onRetry: () =>

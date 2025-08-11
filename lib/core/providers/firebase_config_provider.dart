@@ -31,6 +31,12 @@ final appConfigProvider = FutureProvider<AppConfigData>((ref) async {
   return AppConfigData(
     qiscusAppId: configService.getQiscusAppId(),
     channels: configService.getChannelConfigs(),
+    sdkBaseUrl: configService.getQiscusSdkBaseUrl(),
+    baseUrl: configService.getQiscusBaseUrl(),
+    appTitle: configService.getAppTitle(),
+    enableDebugMode: configService.getEnableDebugMode(),
+    fetchTimeoutMinutes: configService.getFetchTimeoutMinutes(),
+    minimumFetchIntervalHours: configService.getMinimumFetchIntervalHours(),
   );
 });
 
@@ -38,9 +44,21 @@ final appConfigProvider = FutureProvider<AppConfigData>((ref) async {
 class AppConfigData {
   final String qiscusAppId;
   final Map<String, ChannelConfig> channels;
+  final String sdkBaseUrl;
+  final String baseUrl;
+  final String appTitle;
+  final bool enableDebugMode;
+  final int fetchTimeoutMinutes;
+  final int minimumFetchIntervalHours;
   
   const AppConfigData({
     required this.qiscusAppId,
     required this.channels,
+    required this.sdkBaseUrl,
+    required this.baseUrl,
+    required this.appTitle,
+    required this.enableDebugMode,
+    required this.fetchTimeoutMinutes,
+    required this.minimumFetchIntervalHours,
   });
 }

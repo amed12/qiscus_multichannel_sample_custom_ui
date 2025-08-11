@@ -6,6 +6,9 @@ class AppConfig {
   static const String sdkBaseUrl = 'https://api3.qiscus.com';
   static const String baseUrl = 'https://multichannel.qiscus.com';
   static const String appTitle = 'Multi-Channel Chat Demo';
+  static const bool enableDebugMode = true;
+  static const String fetchTimeoutMinutes = '1';
+  static const String minimumFetchIntervalHours = '1';
   
   // Channel configurations
   static const Map<String, ChannelConfig> channels = {
