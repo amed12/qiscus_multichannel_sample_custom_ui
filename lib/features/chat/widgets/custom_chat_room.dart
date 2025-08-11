@@ -22,14 +22,14 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   final ScrollController _scrollController = ScrollController();
   final ILoggerService _logger = LoggerService();
   
-  List<Map<String, dynamic>> _messages = [];
-  final bool _isLoading = false;
   bool _isSending = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialMessages();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
   }
 
   @override
@@ -39,30 +39,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     super.dispose();
   }
 
-  /// Load initial demo messages
-  void _loadInitialMessages() {
-    setState(() {
-      _messages = [
-        {
-          'id': '1',
-          'text': 'Hello! How can I help you today?',
-          'isMe': false,
-          'timestamp': DateTime.now().subtract(const Duration(minutes: 5)),
-          'sender': 'Agent',
-        },
-        {
-          'id': '2', 
-          'text': 'Hi there! I have a question about your service.',
-          'isMe': true,
-          'timestamp': DateTime.now().subtract(const Duration(minutes: 3)),
-          'sender': 'You',
-        },
-      ];
-    });
-    _scrollToBottom();
-  }
-
-  /// Send a text message
+  /// Send a text message using Qiscus SDK
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty || _isSending) return;
 
@@ -72,28 +49,35 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     try {
       setState(() => _isSending = true);
       
-      // Add message to local list immediately
-      final newMessage = {
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'text': messageText,
-        'isMe': true,
-        'timestamp': DateTime.now(),
-        'sender': 'You',
-      };
+      // Create QMessage object for Qiscus SDK
+      final message = QMessage(
+        id: DateTime.now().millisecondsSinceEpoch,
+        chatRoomId: widget.chatRoom.id,
+        uniqueId: DateTime.now().millisecondsSinceEpoch.toString(),
+        text: messageText,
+        type: QMessageType.text,
+        timestamp: DateTime.now(),
+        status: QMessageStatus.sending,
+        previousMessageId: 0,
+        extras: {},
+        payload: null,
+        sender: QUser(
+          id: 'current-user',
+          name: 'You',
+          avatarUrl: null,
+        ),
+      );
       
-      setState(() {
-        _messages.add(newMessage);
+      // Send message using Qiscus provider
+      final qiscus = ref.read(QMultichannel.provider);
+      await qiscus.sendMessage(message);
+      
+      _logger.debug('Message sent successfully: $messageText');
+      
+      // Auto-scroll to bottom after sending
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
       });
-      
-      _scrollToBottom();
-      _logger.debug('Message sent: $messageText');
-      
-      // Simulate sending to Qiscus (replace with actual API call)
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Simulate agent response
-      await Future.delayed(const Duration(seconds: 1));
-      _simulateAgentResponse();
       
     } catch (e) {
       _logger.error('Failed to send message', e);
@@ -102,38 +86,13 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
           SnackBar(
             content: Text('Failed to send message: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
     } finally {
       setState(() => _isSending = false);
     }
-  }
-
-  /// Simulate agent response
-  void _simulateAgentResponse() {
-    final responses = [
-      'Thank you for your message. Let me help you with that.',
-      'I understand your concern. Can you provide more details?',
-      'That\'s a great question! Here\'s what I can tell you...',
-      'I\'m here to assist you. What specific information do you need?',
-    ];
-    
-    final response = responses[DateTime.now().millisecond % responses.length];
-    
-    final agentMessage = {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'text': response,
-      'isMe': false,
-      'timestamp': DateTime.now(),
-      'sender': 'Agent',
-    };
-    
-    setState(() {
-      _messages.add(agentMessage);
-    });
-    
-    _scrollToBottom();
   }
 
   /// Scroll to bottom of message list
@@ -151,15 +110,16 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch messages from Qiscus provider
+    final messages = ref.watch(mappedMessagesProvider);
+    
     return Column(
       children: [
         // Messages list
         Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _messages.isEmpty
-                  ? _buildEmptyState()
-                  : _buildMessagesList(),
+          child: messages.isEmpty
+              ? _buildEmptyState()
+              : _buildMessagesList(messages),
         ),
         
         // Message input
@@ -202,31 +162,38 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   }
 
   /// Build messages list
-  Widget _buildMessagesList() {
+  Widget _buildMessagesList(List<QMessage> messages) {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: _messages.length,
+      itemCount: messages.length,
       itemBuilder: (context, index) {
-        final message = _messages[index];
+        final message = messages[index];
         return _buildMessageBubble(message);
       },
     );
   }
 
   /// Build individual message bubble
-  Widget _buildMessageBubble(Map<String, dynamic> message) {
-    final isMe = message['isMe'] as bool;
-    final text = message['text'] as String;
-    final timestamp = message['timestamp'] as DateTime;
-    final sender = message['sender'] as String;
+  Widget _buildMessageBubble(QMessage message) {
+    // Get current user account to determine if message is from me
+    final account = ref.watch(accountProvider);
+    final isMe = account.when(
+      data: (acc) => message.sender.id == acc.id,
+      loading: () => false,
+      error: (_, __) => false,
+    );
+    
+    final text = message.text;
+    final timestamp = message.timestamp;
+    final senderName = message.sender.name;
     
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          if (!isMe) _buildAvatar(sender),
+          if (!isMe) _buildAvatar(senderName),
           const SizedBox(width: 8),
           Flexible(
             child: Container(
@@ -244,7 +211,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        sender,
+                        senderName,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -272,7 +239,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
             ),
           ),
           const SizedBox(width: 8),
-          if (isMe) _buildAvatar(sender),
+          if (isMe) _buildAvatar(senderName),
         ],
       ),
     );
@@ -282,7 +249,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   Widget _buildAvatar(String senderName) {
     return CircleAvatar(
       radius: 16,
-      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+      backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
       child: Text(
         senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
         style: TextStyle(
