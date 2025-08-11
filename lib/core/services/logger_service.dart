@@ -20,7 +20,7 @@ class LoggerService implements ILoggerService {
       lineLength: 120,
       colors: true,
       printEmojis: true,
-      printTime: false,
+      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
     ),
   );
 
