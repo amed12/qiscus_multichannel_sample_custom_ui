@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="qiscus_multichannel_sample_custom_ui"
+        android:label="multichannel_flutter_sample"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
