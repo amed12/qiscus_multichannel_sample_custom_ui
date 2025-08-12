@@ -105,7 +105,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   @override
   Widget build(BuildContext context) {
     // Follow Qiscus pattern: watch providers directly like in QChatRoomScreenState
-    final messages = ref.watch(mappedMessagesProvider);
+    final messages = ref.watch(mappedMessagesProvider).reversed.toList();
     final room = ref.watch(roomProvider.select((v) => v.valueOrNull?.room));
     
     // Show loading if no messages and no room yet
