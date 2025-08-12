@@ -70,7 +70,7 @@ class AppWidget extends ConsumerWidget {
                 colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
                 useMaterial3: true,
               ),
-              home: HomePage(title: error.toString()),
+              home: HomePage(title: AppConfig.appTitle),
             );
           },
         );
