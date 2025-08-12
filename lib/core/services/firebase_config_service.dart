@@ -21,7 +21,7 @@ abstract class IFirebaseConfigService {
 
 class FirebaseConfigService implements IFirebaseConfigService {
   final ILoggerService _logger;
-  late final FirebaseRemoteConfig _remoteConfig;
+  final FirebaseRemoteConfig _remoteConfig;
   
   // Remote config keys
   static const String _qiscusAppIdKey = 'qiscus_app_id';
@@ -34,7 +34,7 @@ class FirebaseConfigService implements IFirebaseConfigService {
   static const String _fetchTimeoutMinutesKey = 'fetch_timeout_minutes';
   static const String _minimumFetchIntervalHoursKey = 'minimum_fetch_interval_hours';
   
-  FirebaseConfigService({
+  FirebaseConfigService(this._remoteConfig, {
     required ILoggerService logger,
   }) : _logger = logger;
 
@@ -42,8 +42,6 @@ class FirebaseConfigService implements IFirebaseConfigService {
   Future<void> initialize() async {
     try {
       _logger.debug('Initializing Firebase Remote Config...');
-      
-      _remoteConfig = FirebaseRemoteConfig.instance;
       
       // Set configuration settings
       await _remoteConfig.setConfigSettings(

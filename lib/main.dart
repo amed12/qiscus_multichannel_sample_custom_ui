@@ -1,3 +1,4 @@
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,7 +27,7 @@ void main() async {
     
     // Initialize Firebase Remote Config
     logger.info('Initializing Firebase Remote Config...');
-    final configService = FirebaseConfigService(logger: logger);
+    final configService = FirebaseConfigService(FirebaseRemoteConfig.instance, logger: logger);
     await configService.initialize();
     
     logger.info('App initialization completed successfully');

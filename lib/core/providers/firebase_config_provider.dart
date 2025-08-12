@@ -1,3 +1,4 @@
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/firebase_config_service.dart';
 import '../services/logger_service.dart';
@@ -6,7 +7,7 @@ import '../config/app_config.dart';
 /// Provider for Firebase Remote Config service
 final firebaseConfigServiceProvider = Provider<IFirebaseConfigService>((ref) {
   final logger = LoggerService();
-  return FirebaseConfigService(logger: logger);
+  return FirebaseConfigService(FirebaseRemoteConfig.instance, logger: logger);
 });
 
 /// Provider for remote Qiscus App ID
