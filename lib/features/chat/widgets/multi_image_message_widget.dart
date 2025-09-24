@@ -274,7 +274,7 @@ class MultiImageMessageWidget extends StatelessWidget {
                 ),
                 if (isLastTile)
                   Container(
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     child: Center(
                       child: Text(
                         '+${images.length - 3}',

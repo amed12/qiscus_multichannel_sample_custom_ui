@@ -171,6 +171,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
       
       // Handle case where no images were successfully uploaded
       if (uploadedUrls.isEmpty) {
+        if(!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to upload images')),
         );
@@ -206,6 +207,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
       }
       
       // Show success message to user
+      if(!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${uploadedUrls.length} image(s) sent')),
       );
@@ -218,6 +220,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     } catch (e) {
       // Log error and notify user
       _logger.error('Failed to upload images', e);
+      if(!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
       );
@@ -544,7 +547,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
               child: Container(
                 decoration: BoxDecoration(
                   color: isMe 
-                      ? Theme.of(context).primaryColor.withOpacity(0.1)
+                      ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
                       : Colors.grey[100],
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -640,7 +643,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   Widget _buildAvatar(String senderName) {
     return CircleAvatar(
       radius: 16,
-      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+      backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
       child: Text(
         senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
         style: TextStyle(

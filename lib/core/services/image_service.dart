@@ -34,6 +34,7 @@ class ImageService implements IImageService {
       }
       
       final status = await requestPermissions(permission: permission);
+      if(!context.mounted) return [];
       final hasPermission = await handlePermissionStatus(context: context, status: status);
       
       if (!hasPermission) {
@@ -61,6 +62,7 @@ class ImageService implements IImageService {
       return selectedImages;
     } catch (e) {
       _logger.error('Failed to pick multiple images', e);
+      if(!context.mounted) return [];
       _showErrorDialog(context, 'Failed to pick images: ${e.toString()}');
       return [];
     }
@@ -84,6 +86,7 @@ class ImageService implements IImageService {
       }
       
       final status = await requestPermissions(permission: permission);
+      if(!context.mounted) return null;
       final hasPermission = await handlePermissionStatus(context: context, status: status);
       
       if (!hasPermission) {
@@ -109,6 +112,7 @@ class ImageService implements IImageService {
       return imageFile;
     } catch (e) {
       _logger.error('Failed to pick single image', e);
+      if(!context.mounted) return null;
       _showErrorDialog(context, 'Failed to pick image: ${e.toString()}');
       return null;
     }
