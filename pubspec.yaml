@@ -38,6 +38,9 @@ dependencies:
   flutter_riverpod: ^2.5.1
   hooks_riverpod: ^2.6.1
   logger: ^2.4.0
+  image_picker: ^1.0.7
+  permission_handler: ^11.3.1
+  device_info_plus: ^9.1.2
 
 dev_dependencies:
   flutter_test:
