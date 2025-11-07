@@ -1,22 +1,20 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qiscus_multichannel_widget/qiscus_multichannel_widget.dart';
+import 'package:date_format/date_format.dart';
+import 'package:grouped_list/grouped_list.dart';
 import '../../../core/services/logger_service.dart';
-import '../../../core/services/image_upload_service.dart';
-import '../../../core/services/message_service.dart';
-import '../../../core/config/app_config.dart';
+import '../../../core/providers/replied_message_provider.dart';
 import 'image_attachment_widget.dart';
 import 'multi_image_message_widget.dart';
 
 /// Custom chat room widget built from scratch following Qiscus patterns
 /// Following Single Responsibility Principle - handles chat UI and messaging
 class CustomChatRoom extends ConsumerStatefulWidget {
-  final QChatRoom chatRoom;
-
   const CustomChatRoom({
     super.key,
-    required this.chatRoom,
   });
 
   @override
@@ -33,19 +31,28 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   @override
   void initState() {
     super.initState();
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Log initial message count for debugging
+      final messages = ref.read(messagesNotifierProvider);
+      _logger.debug('Chat room initialized with ${messages.length} messages');
+      
       _scrollToBottom();
     });
   }
 
   @override
   void dispose() {
+    // Log message count before disposal for debugging
+    final messages = ref.read(messagesNotifierProvider);
+    _logger.debug('Disposing chat room with ${messages.length} messages');
+    
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Send a text message using Qiscus patterns
+  /// Send a text message using Qiscus SDK patterns
   Future<void> _sendMessage() async {
     final messageText = _messageController.text.trim();
     final hasText = messageText.isNotEmpty;
@@ -69,28 +76,44 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     });
 
     try {
-      // Send text message if available
+      final qiscus = ref.read(qiscusSDKProvider);
+      final roomId = await ref.read(roomIdProvider.future);
+      final repliedMessage = ref.read(repliedMessageProvider);
+      
+      // Send text message if available - following SDK pattern
       if (hasText) {
-        final textMessage = QMessage(
-          id: DateTime.now().millisecondsSinceEpoch,
-          chatRoomId: widget.chatRoom.id,
-          uniqueId: DateTime.now().millisecondsSinceEpoch.toString(),
-          text: messageText,
-          type: QMessageType.text,
-          timestamp: DateTime.now(),
-          status: QMessageStatus.sending,
-          previousMessageId: 0,
-          extras: {},
-          payload: {},
-          sender: QUser(
-            id: AppConfig.userId,
-            name: AppConfig.displayName,
-            avatarUrl: null,
-          ),
-        );
+        final QMessage textMessage;
         
+        // Check if replying to a message (EXACTLY like SDK)
+        if (repliedMessage != null) {
+          // Use generateReplyMessage for reply
+          textMessage = qiscus.generateReplyMessage(
+            chatRoomId: roomId,
+            text: messageText,
+            repliedMessage: repliedMessage,
+          );
+          
+          // Clear replied message after using it
+          ref.read(repliedMessageProvider.notifier).state = null;
+          
+          _logger.debug('Sending reply message to: ${repliedMessage.text}');
+        } else {
+          // Use generateMessage for normal message
+          textMessage = qiscus.generateMessage(
+            chatRoomId: roomId,
+            text: messageText,
+          );
+          
+          _logger.debug('Sending normal text message');
+        }
+        
+        // Send using messagesNotifierProvider like SDK does
         await ref.read(messagesNotifierProvider.notifier).sendMessage(textMessage);
-        _logger.debug('Text message sent successfully');
+        
+        // Synchronize after sending (important!)
+        qiscus.synchronize();
+        
+        _logger.debug('Message sent successfully');
       }
       
       // Upload and send image messages if available
@@ -117,12 +140,12 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     }
   }
 
-  /// Upload and send selected images
-  /// This method handles the complete flow of:
-  /// 1. Uploading multiple images sequentially with progress updates
-  /// 2. Determining whether to send as a single image or multi-image message
-  /// 3. Creating and sending the appropriate message type
-  /// 4. Providing user feedback throughout the process
+  /// Upload and send selected images following SDK pattern
+  /// This follows the exact pattern from uploader_provider.dart:
+  /// 1. Upload using qiscus.upload() stream for real-time progress
+  /// 2. Use generateFileAttachmentMessage() after upload
+  /// 3. Send via messagesNotifierProvider
+  /// 4. Call synchronize() after sending
   /// 
   /// @param imageFiles List of File objects to upload and send
   Future<void> _uploadAndSendImages(List<File> imageFiles) async {
@@ -133,97 +156,78 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     });
     
     try {
-      // Show initial upload progress indicator
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
-              SizedBox(width: 16),
-              Text('Uploading images...'),
-            ],
-          ),
-          duration: Duration(minutes: 5), // Long duration as we'll dismiss it manually
-        ),
-      );
+      final qiscus = ref.read(qiscusSDKProvider);
+      final roomId = await ref.read(roomIdProvider.future);
       
-      // Get the image upload service from provider
-      final imageUploadService = ref.read(imageUploadServiceProvider);
-      
-      // Upload images sequentially with progress callback
-      final uploadedUrls = await imageUploadService.uploadMultipleImages(
-        imageFiles,
-        onProgress: (current, total, progress) {
-          // Update progress indicator with current upload status
+      // Upload each image following SDK pattern
+      for (int i = 0; i < imageFiles.length; i++) {
+        final file = imageFiles[i];
+        
+        // Show upload progress
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Uploading $current of $total: ${(progress * 100).toInt()}%'),
-              duration: const Duration(milliseconds: 300),
+              content: Text('Uploading image ${i + 1} of ${imageFiles.length}...'),
+              duration: const Duration(seconds: 1),
             ),
           );
-        },
-      );
+        }
+        
+        // Upload using SDK's upload stream (like uploader_provider.dart)
+        var cancelToken = CancelToken();
+        var stream = qiscus.upload(file, cancelToken: cancelToken);
+        
+        await for (var data in stream) {
+          if (data.data != null) {
+            // Upload complete - generate file attachment message
+            final message = qiscus.generateFileAttachmentMessage(
+              chatRoomId: roomId,
+              caption: '',
+              url: data.data!,
+            );
+            
+            // Send message using messagesNotifierProvider (SDK pattern)
+            await ref.read(messagesNotifierProvider.notifier).sendMessage(message);
+            
+            // Synchronize after sending (important!)
+            qiscus.synchronize();
+            
+            _logger.debug('Image ${i + 1} sent successfully');
+          } else {
+            // Update progress
+            final progress = (data.progress * 100).toInt();
+            _logger.debug('Upload progress: $progress%');
+          }
+        }
+      }
       
-      // Reset uploading state once uploads are complete
+      // Reset uploading state
       setState(() {
         _isUploading = false;
       });
       
-      // Handle case where no images were successfully uploaded
-      if (uploadedUrls.isEmpty) {
-        if(!mounted) return;
+      // Show success message
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to upload images')),
+          SnackBar(content: Text('${imageFiles.length} image(s) sent successfully')),
         );
-        return;
       }
       
-      // Get the message service from provider
-      final messageService = ref.read(messageServiceProvider);
-      
-      // Determine message type based on number of images
-      if (uploadedUrls.length > 1) {
-        // For multiple images: create a custom multi-image message type
-        // This uses a special payload format that our MultiImageMessageWidget can render
-        final message = messageService.generateMultiImageMessage(
-          chatRoomId: widget.chatRoom.id,
-          imageUrls: uploadedUrls,
-          imageFiles: imageFiles,
-        );
-        
-        await messageService.sendMessage(message);
-      } else if (uploadedUrls.isNotEmpty) {
-        // For single image: use standard Qiscus attachment message type
-        // This maintains compatibility with standard Qiscus UI components
-        final imageFile = imageFiles.first;
-        final message = messageService.generateImageMessage(
-          chatRoomId: widget.chatRoom.id,
-          imageUrl: uploadedUrls.first,
-          filePath: imageFile.path,
-          fileSize: imageFile.lengthSync(),
-        );
-        
-        await messageService.sendMessage(message);
-      }
-      
-      // Show success message to user
-      if(!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${uploadedUrls.length} image(s) sent')),
-      );
-      
-      // Auto-scroll to bottom after sending to show the new message
+      // Auto-scroll to bottom
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
       });
       
     } catch (e) {
-      // Log error and notify user
       _logger.error('Failed to upload images', e);
-      if(!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading images: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       setState(() {
         _isUploading = false;
       });
@@ -245,47 +249,102 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
   }
 
   /// Scroll to bottom of message list
+  /// With reverse: true, bottom is at minScrollExtent (position 0)
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          _scrollController.position.minScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       });
     }
   }
+  
+  /// Scroll to specific message by ID
+  void _scrollToMessage(int? messageId) {
+    if (messageId == null) return;
+    
+    // Use postFrameCallback to ensure widget is still mounted
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      final messages = ref.read(mappedMessagesProvider);
+      final index = messages.indexWhere((m) => m.id == messageId);
+      
+      if (index == -1) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Message not found')),
+          );
+        }
+        return;
+      }
+      
+      // Calculate approximate position
+      // Each message is roughly 80-100 pixels, use 90 as average
+      final estimatedPosition = index * 90.0;
+      
+      if (_scrollController.hasClients && mounted) {
+        _scrollController.animateTo(
+          estimatedPosition,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Follow Qiscus pattern: watch providers directly like in QChatRoomScreenState
-    final messages = ref.watch(messagesNotifierProvider).reversed.toList();
-    final room = ref.watch(roomProvider.select((v) => v.valueOrNull?.room));
+    // CRITICAL: Keep messagesNotifierProvider alive to prevent state loss on navigation
+    ref.listen(messagesNotifierProvider, (_, __) {});
     
-    // Show loading if no messages and no room yet
-    if (messages.isEmpty && room == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    // EXACTLY like SDK: Track load more state in build() method
+    var isAbleToLoadMore = false;
+    var lastCountMessage = 0;
     
-    return Column(
-      children: [
-        // Messages list
-        Expanded(
-          child: messages.isEmpty && room != null
-              ? _buildEmptyState()
-              : _buildMessagesList(messages),
+    // Follow SDK pattern: watch providers
+    final base = appThemeConfigProvider.select((v) => v.baseColor);
+    final baseBgColor = ref.watch(base);
+    final messages = ref.watch(mappedMessagesProvider);
+    final room = ref.watch(roomProvider.select((v) => v.whenData((v) => v.room).value));
+    
+    // EXACTLY like SDK: isAbleToLoadMore logic
+    isAbleToLoadMore = lastCountMessage < messages.length;
+    
+    return Scaffold(
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification scrollInfo) {
+          // EXACTLY like SDK: Load more at maxScrollExtent
+          if (scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent &&
+              isAbleToLoadMore) {
+            ref.read(messagesNotifierProvider.notifier).loadMoreMessage();
+            isAbleToLoadMore = false;
+          }
+          return false;
+        },
+        child: Column(
+          children: [
+            Expanded(
+              flex: 1,
+              child: Container(
+                color: baseBgColor,
+                child: buildMessageList(messages, room),
+              ),
+            ),
+            _buildMessageInput(),
+          ],
         ),
-        
-        // Message input
-        _buildMessageInput(),
-      ],
+      ),
     );
   }
 
-  /// Build empty state when no messages (following Qiscus pattern)
-  Widget _buildEmptyState() {
-    return SizedBox(
+  Widget _buildChatEmpty() {
+    var theme = ref.watch(appThemeConfigProvider);
+    return Container(
+      color: theme.emptyBackgroundColor,
       width: MediaQuery.of(context).size.width,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -294,7 +353,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
           Text(
             "No Message here yet…",
             style: TextStyle(
-              color: Colors.grey[600],
+              color: theme.emptyTextColor,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
@@ -303,7 +362,7 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
           Text(
             "Great discussion start from greeting each others first",
             style: TextStyle(
-              color: Colors.grey[500],
+              color: theme.emptyTextColor,
               fontSize: 13,
             ),
           ),
@@ -312,67 +371,194 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
     );
   }
 
-  /// Build messages list (following Qiscus pattern)
-  Widget _buildMessagesList(List<QMessage> messages) {
-    return ListView.builder(
-      controller: _scrollController,
-      reverse: true, // Like in Qiscus - newest messages at bottom
-      padding: const EdgeInsets.all(16),
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final message = messages[index];
-        return _buildMessageBubble(message);
-      },
-    );
-  }
 
-  /// Build individual message bubble (following Qiscus pattern)
-  Widget _buildMessageBubble(QMessage message) {
-    // Follow Qiscus pattern: use accountProvider to determine ownership
-    final accountId = ref.watch(accountProvider.select((v) => v.whenData((value) => value.id)));
-    
-    return accountId.when(
-      data: (accountId) {
-        final isMe = message.sender.id == accountId;
-        return _buildMessageWidget(message, isMe);
-      },
-      loading: () => message.type == QMessageType.attachment 
-          ? _buildImageBubble(message, false)
-          : _buildChatBubble(message, false),
-      error: (e, _) => message.type == QMessageType.attachment 
-          ? _buildImageBubble(message, false)
-          : _buildChatBubble(message, false),
+  Widget buildMessageList(
+    List<QMessage> messages,
+    QChatRoom? room,
+  ) {
+    if (messages.isEmpty && room == null) {
+      return const Center(child: CircularProgressIndicator());
+    } else if (messages.isEmpty && room != null) {
+      return _buildChatEmpty();
+    } else {
+      return GroupedListView<QMessage, DateTime>(
+        controller: _scrollController,
+        reverse: true,
+        elements: messages,
+        groupBy: (message) => _buildGroupList(message),
+        itemBuilder: (context, message) {
+          return InkWell(
+            child: _buildChatBubble(message),
+            onLongPress: () {
+              _showModalBottomSheet(message);
+            },
+          );
+        },
+        itemComparator: (item1, item2) =>
+            item1.timestamp.compareTo(item2.timestamp),
+        floatingHeader: true,
+        useStickyGroupSeparators: true,
+        groupSeparatorBuilder: (DateTime date) {
+          return _buildSeparator(date);
+        },
+        order: GroupedListOrder.DESC,
+      );
+    }
+  }
+  
+  /// Build group list by date (EXACTLY like SDK)
+  DateTime _buildGroupList(QMessage message) {
+    return DateTime.parse(
+        formatDate(message.timestamp, [yyyy, '-', mm, '-', dd]));
+  }
+  
+  /// Build date separator (EXACTLY like SDK)
+  Widget _buildSeparator(DateTime date) {
+    var theme = ref.watch(appThemeConfigProvider);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.timeBackgroundColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(
+                  formatDate(date, [DD, ', ', dd, ' ', MM, ' ', yyyy]),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: theme.timeLabelTextColor,
+                    overflow: TextOverflow.clip,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
   
-  /// Build message widget based on type
-  /// Determines the appropriate widget to render based on message type
-  /// Handles text, image attachment, and custom multi-image message types
-  /// 
-  /// @param message The QMessage to render
-  /// @param isMe Boolean indicating if the message was sent by the current user
+  
+  _showModalBottomSheet(QMessage message) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(25.0),
+        ),
+      ),
+      builder: (context) {
+        return Wrap(
+          spacing: 2,
+          children: [
+            const Padding(padding: EdgeInsets.only(top: 16)),
+            Visibility(
+              visible: message.type == QMessageType.text ||
+                  message.type == QMessageType.reply,
+              child: ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('Copy Message'),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: message.text));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("Message copied"),
+                  ));
+                  Navigator.of(context).maybePop();
+                },
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.reply),
+              title: const Text('Reply'),
+              onTap: () {
+                ref.read(repliedMessageProvider.notifier).state = message;
+                Navigator.of(context).maybePop();
+              },
+            ),
+            const Padding(padding: EdgeInsets.only(bottom: 16)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildChatBubble(QMessage message) {
+    var accountId = ref
+        .watch(accountProvider.select((v) => v.whenData((value) => value.id)));
+
+    return accountId.when(
+      data: (accountId) {
+        if (message.sender.id == accountId) {
+          return _buildMessageWidget(message, true);
+        } else {
+          return _buildMessageWidget(message, false);
+        }
+      },
+      loading: () {
+        return message.type == QMessageType.attachment 
+            ? _buildImageBubble(message, false)
+            : _buildTextBubble(message, false);
+      },
+      error: (e, _) {
+        return Text(e.toString());
+      },
+    );
+  }
+  
   Widget _buildMessageWidget(QMessage message, bool isMe) {
     switch (message.type) {
       case QMessageType.text:
-        return _buildChatBubble(message, isMe);
+        return _buildTextBubble(message, isMe);
       case QMessageType.attachment:
         return _buildImageBubble(message, isMe);
       case QMessageType.custom:
-        // Check if this is our multi-image message type
         if (message.payload?['type'] == 'multi_images') {
           return _buildMultiImageBubble(message, isMe);
         }
-        return _buildChatBubble(message, isMe);
+        return _buildTextBubble(message, isMe);
       default:
-        return _buildChatBubble(message, isMe);
+        return _buildTextBubble(message, isMe);
     }
   }
 
-  /// Build chat bubble widget
-  Widget _buildChatBubble(QMessage message, bool isMe) {
+  Widget _buildTextBubble(QMessage message, bool isMe) {
     final text = message.text;
     final timestamp = message.timestamp;
     final senderName = message.sender.name;
+    
+    // Check if this is a reply message
+    final isReply = message.type == QMessageType.reply;
+    
+    // Extract replied message info from payload
+    String? repliedUsername;
+    String? repliedText;
+    int? repliedMessageId;
+    
+    if (isReply && message.payload != null) {
+      try {
+        // replied_comment_message can be Map or already parsed
+        final repliedData = message.payload;
+        if (repliedData != null) {
+          repliedUsername = repliedData['replied_comment_sender_username']?.toString();
+          repliedText = repliedData['replied_comment_message']?.toString();
+          repliedMessageId = repliedData['replied_comment_id'] as int?;
+        }
+        
+        // Also check for alternative keys
+        repliedUsername ??= '';
+        repliedText ??= '';
+        repliedMessageId ??= 0;
+      } catch (e) {
+        _logger.debug('Error parsing reply payload: $e');
+      }
+    }
     
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -402,6 +588,52 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  // Show replied message indicator
+                  if (isReply && repliedText != null)
+                    GestureDetector(
+                      onTap: repliedMessageId != null 
+                          ? () => _scrollToMessage(repliedMessageId)
+                          : null,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isMe 
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Colors.grey[300],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border(
+                            left: BorderSide(
+                              color: isMe ? Colors.white : Theme.of(context).primaryColor,
+                              width: 3,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              repliedUsername ?? 'Unknown',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isMe ? Colors.white : Theme.of(context).primaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              repliedText,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isMe ? Colors.white70 : Colors.grey[700],
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -657,6 +889,8 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
 
   /// Build message input field
   Widget _buildMessageInput() {
+    final repliedMessage = ref.watch(repliedMessageProvider);
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -667,6 +901,66 @@ class _CustomChatRoomState extends ConsumerState<CustomChatRoom> {
       ),
       child: Column(
         children: [
+          // Reply indicator
+          if (repliedMessage != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border(
+                  left: BorderSide(
+                    color: Theme.of(context).primaryColor,
+                    width: 3,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.reply,
+                    size: 16,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Replying to ${repliedMessage.sender.name}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          repliedMessage.text,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () {
+                      ref.read(repliedMessageProvider.notifier).state = null;
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+          
           // Image attachment widget
           ImageAttachmentWidget(
             onImagesSelected: _onImagesSelected,

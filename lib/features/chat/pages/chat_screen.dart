@@ -61,7 +61,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ],
       ),
-      body: CustomChatRoom(chatRoom: widget.chatRoom),
+      body: const CustomChatRoom(),
     );
   }
 
